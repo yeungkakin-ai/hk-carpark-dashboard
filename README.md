@@ -1,4 +1,4 @@
-# HK Car Park Vacancy — Live Dashboard (v2)
+# HK Car Park Vacancy — Live Dashboard
 
 A self-contained, browser-based dashboard showing near-real-time public car park
 vacancy data for Hong Kong from data.gov.hk (Transport Department + EKEO).
@@ -45,11 +45,7 @@ No npm, Node.js, database, API key or backend service is required.
 
 ## How to run
 
-1. Open a terminal in this folder:
-
-   ```bash
-   cd /home/ykk/hkcarpark-dashboard-v2
-   ```
+1. Open a terminal in the folder containing these files.
 
 2. Start a local web server:
 
@@ -59,16 +55,16 @@ No npm, Node.js, database, API key or backend service is required.
 
 3. Open a browser and go to:
 
-   - On this machine: <http://localhost:8124/index.html>
-   - From another device on the same LAN: <http://192.168.1.190:8124/index.html>
+   - On the same machine: <http://localhost:8124/index.html>
+   - From another device on the same network: <http://YOUR-IP-ADDRESS:8124/index.html>
+     (find your machine's IP with `hostname -I` on Linux or `ipconfig` on Windows)
 
 4. Data loads automatically within a few seconds; it refreshes every 60 seconds.
 
 To run detached (keeps running after the terminal is closed):
 
 ```bash
-cd /home/ykk/hkcarpark-dashboard-v2
-nohup python3 -m http.server 8124 > /tmp/hk-v2-serve.log 2>&1 &
+nohup python3 -m http.server 8124 > /tmp/hk-carpark-serve.log 2>&1 &
 ```
 
 Stop the server with `Ctrl+C` in the foreground terminal, or `pkill -f "http.server 8124"`.
@@ -108,17 +104,11 @@ The dashboard itself does **not** read this file — it fetches live data direct
 ## Troubleshooting
 
 - **Stale page / changes not visible:** hard-refresh with `Ctrl+F5`, or append a version query like `?v=5` to the URL. The page sends no-cache headers, but browsers can still cache.
-- **Search appears not to filter:** confirm you are on port **8124** (v2); port **8123** is the older v1 dashboard. Type in the box next to the 🔍 icon — the result counter beside it updates instantly.
+- **Search appears not to filter:** make sure you are opening `index.html` through the local web server (port **8124**), not by double-clicking the file. Type in the box next to the 🔍 icon — the result counter beside it updates instantly.
 - **Map shows "Map library unavailable":** the CDN for Leaflet is blocked. The list and chart still work. Allow `unpkg.com`.
 - **Chart missing:** allow `cdn.jsdelivr.net`.
-- **Cannot open from another device:** confirm both devices are on the same LAN, the server is bound to `0.0.0.0` (the default of `python3 -m http.server`), and no firewall blocks port 8124.
+- **Cannot open from another device:** confirm both devices are on the same network, the server is bound to `0.0.0.0` (the default of `python3 -m http.server`), and no firewall blocks port 8124.
 - **Port already in use:** stop the existing server or change both the server port and the URL.
-
-## Relation to v1
-
-The original dashboard lives in `/home/ykk/hkcarpark-dashboard/` and is served on port **8123**.
-It has the same Leaflet map and core features but the older layout. This v2 folder is the
-actively developed version; both can run at the same time on their separate ports.
 
 ## Disclaimer / 免責聲明
 
