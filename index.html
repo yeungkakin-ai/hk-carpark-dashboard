@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="0" />
+<title>HK Car Park Vacancy — Live Dashboard</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#0b1120; --panel:#111c2e; --panel2:#162338; --line:#22324c;
+    --txt:#e6edf7; --muted:#93a4bd; --green:#4ade80; --blue:#38bdf8;
+    --yellow:#fbbf24; --red:#f87171; --shadow:0 8px 30px rgba(0,0,0,.35);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:radial-gradient(1200px 600px at 50% -10%,#16233c 0%,var(--bg) 60%);
+    color:var(--txt);
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,"PingFang SC","Microsoft JhengHei",sans-serif;
+    font-size:16px; line-height:1.45; min-height:100vh;
+  }
+  .wrap{max-width:1600px;margin:0 auto;padding:24px 22px 40px}
+  header.top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:14px;margin-bottom:20px}
+  header.top h1{font-size:30px;margin:0 0 4px;letter-spacing:.2px}
+  header.top .sub{color:var(--muted);font-size:15px}
+  .pill{display:inline-flex;align-items:center;gap:8px;background:var(--panel2);border:1px solid var(--line);
+    padding:8px 14px;border-radius:999px;font-size:14px;color:var(--muted)}
+  .dot{width:9px;height:9px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green)}
+  .pill.busy .dot{background:var(--yellow);box-shadow:0 0 8px var(--yellow)}
+  .pill.err .dot{background:var(--red);box-shadow:0 0 8px var(--red)}
+
+  .kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:14px;margin-bottom:20px}
+  .kpi{background:linear-gradient(160deg,var(--panel2),var(--panel));border:1px solid var(--line);
+    border-radius:14px;padding:16px 18px;box-shadow:var(--shadow)}
+  .kpi .label{color:var(--muted);font-size:14px;margin-bottom:6px}
+  .kpi .value{font-size:30px;font-weight:700;line-height:1.1}
+  .kpi .hint{font-size:13px;color:var(--muted);margin-top:4px}
+  .kpi.g .value{color:var(--green)} .kpi.b .value{color:var(--blue)}
+  .kpi.y .value{color:var(--yellow)}
+
+  .controls{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-bottom:16px}
+  .tabs{display:flex;gap:6px;background:var(--panel);border:1px solid var(--line);padding:5px;border-radius:12px}
+  .tabs button{background:transparent;color:var(--muted);border:0;padding:9px 16px;border-radius:8px;
+    font-size:15px;cursor:pointer;transition:background .15s,color .15s;white-space:nowrap}
+  .tabs button:hover{color:var(--txt)}
+  .tabs button.active{background:var(--blue);color:#08101d;font-weight:700}
+  select,input[type=search]{background:var(--panel);color:var(--txt);border:1px solid var(--line);
+    padding:10px 14px;border-radius:10px;font-size:15px;outline:none;height:42px}
+  select{appearance:none;-webkit-appearance:none;padding-right:38px;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%2393a4bd' stroke-width='2'><path d='M6 9l6 6 6-6'/></svg>");
+    background-repeat:no-repeat;background-position:right 12px center;cursor:pointer}
+  select option{background:var(--panel);color:var(--txt)}
+  .search-wrap{position:relative;flex:1 1 240px;min-width:180px;max-width:420px}
+  .search-wrap input{width:100%;padding-left:38px;padding-right:34px}
+  .search-wrap .ico{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--muted);pointer-events:none;font-size:16px}
+  .search-wrap .clr{position:absolute;right:8px;top:50%;transform:translateY(-50%);border:0;background:transparent;
+    color:var(--muted);font-size:18px;cursor:pointer;padding:2px 6px;display:none;line-height:1}
+  .search-wrap .clr:hover{color:var(--txt)}
+  .result-count{font-size:13px;color:var(--muted);white-space:nowrap;min-width:70px}
+  .result-count b{color:var(--blue)}
+  .btn{background:var(--panel2);color:var(--txt);border:1px solid var(--line);padding:10px 16px;
+    border-radius:10px;font-size:15px;cursor:pointer;transition:background .15s;white-space:nowrap;height:42px}
+  .btn:hover{background:#22314a}
+  .spacer{flex:0 0 0}
+  .lang-flag{font-size:16px;margin-right:4px}
+
+  .main-grid{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);gap:18px}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);overflow:hidden}
+  .panel h2{font-size:16px;margin:0;padding:14px 18px;border-bottom:1px solid var(--line);color:var(--txt)}
+  .map-panel{height:600px;display:flex;flex-direction:column}
+  #map{flex:1;width:100%;min-height:0;background:#0d1726}
+  .leaflet-popup-content-wrapper,.leaflet-popup-tip{background:#162338;color:var(--txt);border-radius:10px}
+  .leaflet-popup-content a{color:var(--blue)}
+  .list-panel{height:600px;display:flex;flex-direction:column}
+  .list{overflow-y:auto;flex:1;padding:6px 10px 12px}
+  .row{padding:12px 10px;border-bottom:1px solid var(--line)}
+  .row:last-child{border-bottom:0}
+  .row .r1{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+  .row .name{font-size:16px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .row .free{font-size:20px;font-weight:700;color:var(--green);white-space:nowrap}
+  .row .free.na{color:var(--muted)}
+  .row .free small{font-size:13px;color:var(--muted);font-weight:400}
+  .row .meta{color:var(--muted);font-size:13px;margin:3px 0 8px}
+  .bar-wrap{display:flex;align-items:center;gap:10px}
+  .bar{height:10px;flex:1;background:#22304a;border-radius:5px;overflow:hidden}
+  .bar i{display:block;height:100%;border-radius:5px;transition:width .35s ease}
+  .bar-num{font-size:13px;color:var(--muted);width:46px;text-align:right;font-variant-numeric:tabular-nums}
+  .evtag{display:inline-block;font-size:12px;padding:1px 7px;border-radius:6px;margin-left:6px;
+    background:rgba(74,222,128,.14);color:var(--green)}
+  .natag{display:inline-block;font-size:11px;padding:1px 6px;border-radius:6px;margin-left:6px;
+    background:rgba(148,164,189,.14);color:var(--muted)}
+
+  .chart-panel{margin-top:18px}
+  .chart-box{position:relative;height:300px;padding:10px 16px 16px}
+
+  footer{color:var(--muted);font-size:13px;text-align:center;margin-top:22px}
+
+  @media(max-width:1100px){
+    .kpis{grid-template-columns:repeat(3,minmax(0,1fr))}
+    .main-grid{grid-template-columns:1fr}
+    .map-panel{height:420px} .list-panel{height:480px}
+  }
+  @media(max-width:680px){
+    .wrap{padding:16px 12px 30px}
+    header.top h1{font-size:24px}
+    .kpis{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+    .kpi .value{font-size:25px}
+    .tabs{width:100%;order:1} .tabs button{flex:1;padding:9px 6px;font-size:14px}
+    select{order:2;flex:1 1 calc(50% - 6px)}
+    .search-wrap{order:3;flex:1 1 100%;max-width:none;min-width:0}
+    .btn{order:4}
+    .map-panel{height:320px} .list-panel{height:460px}
+    .chart-box{height:260px}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1 id="tTitle">HK Car Park Vacancy — Live</h1>
+      <div class="sub" id="tSubtitle">Transport Department &amp; EKEO · data.gov.hk · refreshed every 60s</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <select id="langSelect" aria-label="Language">
+        <option value="en_US">🇬🇧 English</option>
+        <option value="zh_TW">🇭🇰 繁體中文</option>
+        <option value="zh_CN">🇨🇳 简体中文</option>
+      </select>
+      <div class="pill" id="statusPill"><span class="dot"></span><span id="statusText">Loading live data…</span></div>
+    </div>
+  </header>
+
+  <section class="kpis" id="kpis">
+    <div class="kpi"><div class="label" id="lblParks">Car parks tracked</div><div class="value" id="kpiParks">—</div><div class="hint" id="hintParks">across HK</div></div>
+    <div class="kpi g"><div class="label" id="lblFree">Total free spaces</div><div class="value" id="kpiFree">—</div><div class="hint" id="hintFree">all vehicles</div></div>
+    <div class="kpi b"><div class="label" id="lblEvParks">Parks with EV feed</div><div class="value" id="kpiEvParks">—</div><div class="hint" id="hintEvParks">report EV spaces</div></div>
+    <div class="kpi y"><div class="label" id="lblEvFree">Live free EV spaces</div><div class="value" id="kpiEvFree">—</div><div class="hint" id="hintEvFree">where reported</div></div>
+    <div class="kpi"><div class="label" id="lblDistricts">Districts covered</div><div class="value" id="kpiDistricts">—</div><div class="hint" id="hintDistricts">of 18 HK districts</div></div>
+  </section>
+
+  <section class="controls">
+    <div class="tabs" id="tabs">
+      <button data-filter="all" class="active" id="tabAll">All car parks</button>
+      <button data-filter="ev" id="tabEv">EV only</button>
+      <button data-filter="nonev" id="tabNonev">Non-EV</button>
+    </div>
+    <select id="districtSelect" aria-label="Select district"><option value="all">All districts</option></select>
+    <select id="sortSelect" aria-label="Sort order">
+      <option value="district">Sort: District</option>
+      <option value="free">Sort: Most free</option>
+      <option value="name">Sort: Name</option>
+    </select>
+    <div class="search-wrap">
+      <span class="ico">🔍</span>
+      <input type="text" id="search" autocomplete="off" spellcheck="false" placeholder="Search car park name…" />
+      <button class="clr" id="clearSearch" aria-label="Clear search">×</button>
+    </div>
+    <span class="result-count" id="resultCount"></span>
+    <div class="spacer"></div>
+    <button class="btn" id="refreshBtn">⟳ Refresh</button>
+  </section>
+
+  <div class="main-grid">
+    <section class="panel map-panel">
+      <h2 id="tMapTitle">Map — free spaces by location</h2>
+      <div id="map"></div>
+    </section>
+    <section class="panel list-panel">
+      <h2 id="listTitle">Car parks — showing all</h2>
+      <div class="list" id="list"></div>
+    </section>
+  </div>
+
+  <section class="panel chart-panel">
+    <h2 id="tChartTitle">Top 12 by free spaces (current view)</h2>
+    <div class="chart-box"><canvas id="chart"></canvas></div>
+  </section>
+
+  <footer><span id="tFooter">Source: data.gov.hk · Car park vacancy &amp; information (Transport Dept. + EKEO) · Attribution: HKSAR Government</span><br /><span id="tDisclaimer"></span></footer>
+</div>
+
+<script>
+'use strict';
+/* ---------- config ---------- */
+var API = "https://api.data.gov.hk/v1/carpark-info-vacancy";
+var REFRESH_MS = 60000;
+
+/* ---------- i18n ---------- */
+var I18N = {
+  en_US: {
+    title:'HK Car Park Vacancy — Live', subtitle:'Transport Department & EKEO · data.gov.hk · refreshed every 60s',
+    loading:'Loading live data…', refreshing:'Refreshing…', live:'Live · latest {t} HKT', failed:'Load failed: {e}',
+    lblParks:'Car parks tracked', hintParks:'across HK', lblFree:'Total free spaces', hintFree:'all vehicles',
+    lblEvParks:'Parks with EV feed', hintEvParks:'report EV spaces', lblEvFree:'Live free EV spaces', hintEvFree:'where reported',
+    lblDistricts:'Districts covered', hintDistricts:'of 18 HK districts',
+    tabAll:'All car parks', tabEv:'EV only', tabNonev:'Non-EV', allDistricts:'All districts',
+    sortDistrict:'Sort: District', sortFree:'Sort: Most free', sortName:'Sort: Name',
+    search:'Search car park name…', refresh:'⟳ Refresh', mapTitle:'Map — free spaces by location',
+    labelAll:'all parks', labelEv:'EV parks', labelNonev:'Non-EV parks',
+    listLabel:'Car parks — {l} ({n})', results:'{n} results', chartTitle:'Top 12 by free spaces (current view)',
+    free:'free', na:'n/a', evTag:'EV {n}', updated:'Updated', noMatch:'No car parks match the current filters.',
+    footer:'Source: data.gov.hk · Car park vacancy & information (Transport Dept. + EKEO) · Attribution: HKSAR Government',
+    naNote:'“n/a” = operator did not provide data (−1 in source)',
+    disclaimer:'Not the data owner. No warranty of accuracy, completeness or timeliness; no liability for errors or decisions made in reliance on this data. Verify with the official source.'
+  },
+  zh_TW: {
+    title:'香港停車場空位 — 即時', subtitle:'運輸署及東九龍總區辦事處 · data.gov.hk · 每 60 秒更新',
+    loading:'正在載入即時數據…', refreshing:'更新中…', live:'即時 · 最新 {t} 香港時間', failed:'載入失敗：{e}',
+    lblParks:'追蹤停車場', hintParks:'全港', lblFree:'空位總數', hintFree:'所有車輛',
+    lblEvParks:'設有電動車資訊的停車場', hintEvParks:'提供電動車空位', lblEvFree:'電動車空位', hintEvFree:'已通報的數據',
+    lblDistricts:'涵蓋地區', hintDistricts:'香港 18 區',
+    tabAll:'所有停車場', tabEv:'電動車', tabNonev:'非電動車', allDistricts:'所有地區',
+    sortDistrict:'排序：地區', sortFree:'排序：空位最多', sortName:'排序：名稱',
+    search:'搜尋停車場名稱…', refresh:'⟳ 重新整理', mapTitle:'地圖 — 各地點空位',
+    labelAll:'所有停車場', labelEv:'電動車停車場', labelNonev:'非電動車停車場',
+    listLabel:'停車場 — {l} ({n})', results:'{n} 個結果', chartTitle:'空位最多的 12 個停車場（目前檢視）',
+    free:'空位', na:'不適用', evTag:'電動車 {n}', updated:'更新', noMatch:'沒有符合目前條件的停車場。',
+    footer:'資料來源：data.gov.hk · 停車場空位及資料（運輸署及東九龍總區辦事處）· 鳴謝：香港特別行政區政府',
+    naNote:'「不適用」= 經營者未提供數據（原始值 −1）',
+    disclaimer:'筆者並非數據擁有者，對數據的準確性、完整性或及時性不作任何保證，亦不對任何錯誤或依賴本資訊而作出的決定承擔責任。請以官方資料為準。'
+  },
+  zh_CN: {
+    title:'香港停车场空位 — 实时', subtitle:'运输署及东九龙总区办事处 · data.gov.hk · 每 60 秒更新',
+    loading:'正在加载实时数据…', refreshing:'更新中…', live:'实时 · 最新 {t} 香港时间', failed:'加载失败：{e}',
+    lblParks:'追踪停车场', hintParks:'全港', lblFree:'空位总数', hintFree:'所有车辆',
+    lblEvParks:'设有电动车信息的停车场', hintEvParks:'提供电动车空位', lblEvFree:'电动车空位', hintEvFree:'已通报的数据',
+    lblDistricts:'涵盖地区', hintDistricts:'香港 18 区',
+    tabAll:'所有停车场', tabEv:'电动车', tabNonev:'非电动车', allDistricts:'所有地区',
+    sortDistrict:'排序：地区', sortFree:'排序：空位最多', sortName:'排序：名称',
+    search:'搜索停车场名称…', refresh:'⟳ 刷新', mapTitle:'地图 — 各地点空位',
+    labelAll:'所有停车场', labelEv:'电动车停车场', labelNonev:'非电动车停车场',
+    listLabel:'停车场 — {l} ({n})', results:'{n} 个结果', chartTitle:'空位最多的 12 个停车场（当前视图）',
+    free:'空位', na:'不适用', evTag:'电动车 {n}', updated:'更新', noMatch:'没有符合当前条件的停车场。',
+    footer:'数据来源：data.gov.hk · 停车场空位及资料（运输署及东九龙总区办事处）· 鸣谢：香港特别行政区政府',
+    naNote:'“不适用” = 经营者未提供数据（原始值 −1）',
+    disclaimer:'作者并非数据拥有者，对数据的准确性、完整性或及时性不作任何保证，也不对任何错误或依赖本信息而作出的决定承担责任。请以官方资料为准。'
+  }
+};
+var lang = 'en_US';
+function T(){ return I18N[lang]; }
+function tpl(s, vars){ return s.replace(/\{(\w+)\}/g, function(m,k){ return vars[k] != null ? vars[k] : m; }); }
+
+function applyI18n(){
+  var d = T();
+  document.title = d.title;
+  $('tTitle').textContent = d.title;
+  $('tSubtitle').textContent = d.subtitle;
+  $('lblParks').textContent=d.lblParks; $('hintParks').textContent=d.hintParks;
+  $('lblFree').textContent=d.lblFree; $('hintFree').textContent=d.hintFree;
+  $('lblEvParks').textContent=d.lblEvParks; $('hintEvParks').textContent=d.hintEvParks;
+  $('lblEvFree').textContent=d.lblEvFree; $('hintEvFree').textContent=d.hintEvFree;
+  $('lblDistricts').textContent=d.lblDistricts; $('hintDistricts').textContent=d.hintDistricts;
+  $('tabAll').textContent=d.tabAll; $('tabEv').textContent=d.tabEv; $('tabNonev').textContent=d.tabNonev;
+  $('refreshBtn').textContent=d.refresh;
+  $('tMapTitle').textContent=d.mapTitle;
+  $('tChartTitle').textContent=d.chartTitle;
+  $('tFooter').textContent=d.footer;
+  $('tDisclaimer').textContent=d.disclaimer;
+  searchInput.placeholder = d.search;
+  $('resultCount').innerHTML = tpl(d.results, {n:'<b>'+state.records.length+'</b>'});
+  var so = sortSelect.options;
+  so[0].textContent=d.sortDistrict; so[1].textContent=d.sortFree; so[2].textContent=d.sortName;
+  districtSelect.options[0].textContent = d.allDistricts;
+  document.documentElement.lang = (lang==='en_US'?'en':lang==='zh_TW'?'zh-Hant':'zh-Hans');
+}
+
+/* ---------- state ---------- */
+var state = {
+  filter:'all', district:'all', sort:'district', search:'',
+  records:[], allRecords:[], maxFree:1, lastFetch:null, busy:false,
+  map:null, markers:null, chart:null, listScroll:0
+};
+
+/* ---------- DOM refs ---------- */
+var $ = function(id){ return document.getElementById(id); };
+var statusPill=$('statusPill'), statusText=$('statusText');
+var listEl=$('list'), listTitle=$('listTitle');
+var districtSelect=$('districtSelect'), sortSelect=$('sortSelect'), searchInput=$('search');
+var langSelect=$('langSelect'), clearSearch=$('clearSearch');
+
+/* ---------- helpers ---------- */
+function normDistrict(d){ return (d || 'Unknown').replace(/\s+District$|\s+區$/g, '').trim(); }
+function districtLabel(d){
+  if (d === 'Islands') return 'Islands(Tung Chung)';
+  if (d === '離島區') return '離島區(東涌)';
+  if (d === '离岛区') return '离岛区(东涌)';
+  return d;
+}
+function fmtTime(ts){ return ts ? ts.replace(/-/g,'/').slice(0,16) : '—'; }
+function escapeHtml(s){
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+  });
+}
+function colorFor(free){
+  if(free == null) return '#64748b';
+  var r = free / state.maxFree;
+  if (r >= 0.5) return '#4ade80';
+  if (r >= 0.2) return '#fbbf24';
+  return '#f87171';
+}
+function setStatus(msg, cls){
+  statusText.textContent = msg;
+  statusPill.className = 'pill' + (cls ? ' ' + cls : '');
+}
+
+/* ---------- data parsing (handles -1 sentinel per official spec) ---------- */
+function parseFree(main){
+  // Official spec: vacancy_type A -> -1 = "no data"; 0 = full.
+  //                vacancy_type B -> 1 = spaces available, 0 = full, -1 = no data.
+  //                vacancy_type C -> closed (0).
+  var raw = main.vacancy;
+  var type = main.vacancy_type;
+  if(raw === undefined || raw === null || Number(raw) < 0) return null; // -1 => no data
+  if(type === 'B') return Number(raw) > 0 ? null : 0; // B has no actual count; treat "available" as unknown
+  if(type === 'C') return 0; // closed
+  return Number(raw);
+}
+function parseEv(main){
+  var v = main.vacancyEV;
+  if(v === undefined || v === null || Number(v) < 0) return null;
+  return Number(v);
+}
+
+/* ---------- fetch + merge ---------- */
+function jget(url){
+  return fetch(url, {cache:'no-store'}).then(function(r){
+    if(!r.ok) throw new Error('HTTP ' + r.status);
+    return r.json();
+  });
+}
+function loadData(){
+  if (state.busy) return;
+  state.busy = true;
+  setStatus(T().refreshing, 'busy');
+  var langParam = '&lang=' + lang;
+  Promise.all([
+    jget(API + '?data=info&max=600' + langParam),
+    jget(API + '?data=vacancy&max=600' + langParam)
+  ]).then(function(res){
+    var info = res[0].results || [];
+    var vac  = res[1].results || [];
+    var infoById = {};
+    info.forEach(function(p){ infoById[p.park_Id] = p; });
+
+    var records = [];
+    vac.forEach(function(v){
+      var meta = infoById[v.park_Id];
+      if (!meta) return;
+      var pcs = (v.privateCar || []).filter(function(p){ return p && typeof p === 'object'; });
+      var main = pcs.filter(function(p){ return p.vacancy_type === 'A'; })[0] || pcs[0] || {};
+      var free = parseFree(main);
+      var ev = parseEv(main);
+      records.push({
+        id: v.park_Id,
+        name: meta.name || ('Car park ' + v.park_Id),
+        district: normDistrict(meta.district),
+        lat: Number(meta.latitude), lng: Number(meta.longitude),
+        free: free,
+        ev: ev,
+        lastupdate: main.lastupdate || '',
+        hasEvFeed: ev !== null
+      });
+    });
+
+    state.allRecords = records;
+    state.maxFree = Math.max(1, records.reduce(function(m,r){ return m + (r.free||0); }, 0));
+    var districts = {};
+    records.forEach(function(r){ districts[r.district] = 1; });
+
+    /* KPIs reflect full dataset */
+    var known = records.filter(function(r){ return r.free !== null; });
+    var evParks = records.filter(function(r){ return r.hasEvFeed; });
+    $('kpiParks').textContent = records.length;
+    $('kpiFree').textContent = known.reduce(function(s,r){ return s + r.free; }, 0).toLocaleString();
+    $('kpiEvParks').textContent = evParks.length;
+    $('kpiEvFree').textContent = evParks.reduce(function(s,r){ return s + (r.ev || 0); }, 0).toLocaleString();
+    $('kpiDistricts').textContent = Object.keys(districts).length;
+
+    /* district dropdown — preserve selection across language change by index */
+    var prev = districtSelect.value;
+    var prevIdx = districtSelect.selectedIndex;
+    Array.prototype.slice.call(districtSelect.options).slice(1).forEach(function(o){ o.remove(); });
+    Object.keys(districts).sort().forEach(function(d){
+      var o = document.createElement('option'); o.value = d; o.textContent = districtLabel(d); districtSelect.appendChild(o);
+    });
+    if(prev === 'all' || districts[prev]) districtSelect.value = prev;
+    else if(prevIdx > 0 && prevIdx < districtSelect.options.length) districtSelect.selectedIndex = prevIdx;
+    else districtSelect.value = 'all';
+    state.district = districtSelect.value;
+
+    applyFilters();
+    var latest = records.reduce(function(m,r){ return r.lastupdate > m ? r.lastupdate : m; }, '');
+    state.lastFetch = latest;
+    setStatus(tpl(T().live, {t:fmtTime(latest)}));
+    state.busy = false;
+  }).catch(function(err){
+    console.error(err);
+    setStatus(tpl(T().failed, {e:err.message}), 'err');
+    state.busy = false;
+  });
+}
+
+/* ---------- filtering ---------- */
+function applyFilters(){
+  var q = state.search.trim().toLowerCase();
+  var recs = state.allRecords.filter(function(r){
+    if (state.filter === 'ev' && !(r.hasEvFeed && r.ev > 0)) return false;
+    if (state.filter === 'nonev' && r.hasEvFeed) return false;
+    if (state.district !== 'all' && r.district !== state.district) return false;
+    if (q && r.name.toLowerCase().indexOf(q) === -1 && r.district.toLowerCase().indexOf(q) === -1) return false;
+    return true;
+  });
+  recs.sort(function(a,b){
+    if (state.sort === 'free') return (b.free==null?-1:b.free) - (a.free==null?-1:a.free);
+    if (state.sort === 'name') return a.name.localeCompare(b.name);
+    if (a.district !== b.district) return a.district.localeCompare(b.district);
+    return a.name.localeCompare(b.name);
+  });
+  state.records = recs;
+  renderList();
+  renderMarkers();
+  renderChart();
+  var d = T();
+  var label = state.filter === 'ev' ? d.labelEv : state.filter === 'nonev' ? d.labelNonev : d.labelAll;
+  listTitle.textContent = tpl(d.listLabel, {l:label, n:recs.length});
+  $('resultCount').innerHTML = tpl(d.results, {n:'<b>'+recs.length+'</b>'});
+}
+
+/* ---------- list ---------- */
+function renderList(){
+  var d = T();
+  state.listScroll = listEl.scrollTop;
+  var parts = [];
+  state.records.forEach(function(r){
+    var isNa = r.free === null;
+    var w = isNa ? 0 : Math.max(2, Math.min(100, Math.round(r.free / state.maxFree * 100)));
+    var col = colorFor(r.free);
+    var ev = r.hasEvFeed ? '<span class="evtag">' + tpl(d.evTag,{n:r.ev}) + '</span>'
+                         : (isNa ? '<span class="natag">' + d.na + '</span>' : '');
+    var freeTxt = isNa ? d.na : (r.free + ' <small>' + d.free + '</small>');
+    parts.push(
+      '<div class="row">' +
+        '<div class="r1"><span class="name" title="' + escapeHtml(r.name) + '">' + escapeHtml(r.name) + ev + '</span>' +
+        '<span class="free' + (isNa?' na':'') + '">' + freeTxt + '</span></div>' +
+        '<div class="meta">' + escapeHtml(districtLabel(r.district)) + ' · ' + d.updated + ' ' + escapeHtml(fmtTime(r.lastupdate)) + ' HKT</div>' +
+        '<div class="bar-wrap"><div class="bar"><i style="width:' + w + '%;background:' + col + '"></i></div>' +
+        '<span class="bar-num">' + (isNa ? d.na : w + '%') + '</span></div>' +
+      '</div>'
+    );
+  });
+  listEl.innerHTML = parts.length ? parts.join('') : '<div class="row meta">' + d.noMatch + '</div>';
+  listEl.scrollTop = state.listScroll;
+  clearSearch.style.display = searchInput.value ? 'block' : 'none';
+}
+
+/* ---------- map ---------- */
+function initMap(){
+  if (typeof L === 'undefined') {
+    $('map').innerHTML = '<div style="padding:30px;color:#93a4bd">Map library unavailable — list and chart still work.</div>';
+    return;
+  }
+  state.map = L.map('map', { scrollWheelZoom: true }).setView([22.32, 114.17], 12);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19, attribution: '&copy; OpenStreetMap contributors'
+  }).addTo(state.map);
+  state.markers = L.layerGroup().addTo(state.map);
+}
+function renderMarkers(){
+  if (!state.markers) return;
+  state.markers.clearLayers();
+  var d = T(), pts = [];
+  state.records.forEach(function(r){
+    if (!isFinite(r.lat) || !isFinite(r.lng)) return;
+    var col = colorFor(r.free);
+    var m = L.circleMarker([r.lat, r.lng], {
+      radius: r.free==null?4:(r.free>150?9:r.free>50?7:5),
+      color:'#0b1120', weight:1, fillColor:col, fillOpacity:0.9
+    });
+    m.bindPopup(
+      '<b>' + escapeHtml(r.name) + '</b><br>' + escapeHtml(districtLabel(r.district)) +
+      '<br>' + d.lblFree + ': <b style="color:' + col + '">' + (r.free==null?d.na:r.free) + '</b>' +
+      (r.hasEvFeed ? '<br>' + tpl(d.evTag,{n:r.ev}) : '') +
+      '<br>' + d.updated + ': ' + escapeHtml(fmtTime(r.lastupdate))
+    );
+    state.markers.addLayer(m);
+    pts.push([r.lat, r.lng]);
+  });
+  if (pts.length && (state.filter !== 'all' || state.district !== 'all')) state.map.fitBounds(L.latLngBounds(pts).pad(0.15));
+}
+
+/* ---------- chart ---------- */
+function renderChart(){
+  if (typeof Chart === 'undefined') return;
+  var top = state.records.filter(function(r){ return r.free !== null; })
+                         .sort(function(a,b){ return b.free - a.free; }).slice(0,12);
+  var labels = top.map(function(r){ return r.name.length > 26 ? r.name.slice(0,25) + '…' : r.name; });
+  var data = top.map(function(r){ return r.free; });
+  var colors = top.map(function(r){ return colorFor(r.free); });
+  if (state.chart) { state.chart.destroy(); state.chart = null; }
+  state.chart = new Chart($('chart'), {
+    type:'bar',
+    data:{ labels:labels, datasets:[{ label:T().lblFree, data:data, backgroundColor:colors, borderRadius:5 }] },
+    options:{
+      indexAxis:'y', responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ display:false } },
+      scales:{ x:{ ticks:{ color:'#93a4bd' }, grid:{ color:'#22304a' } },
+               y:{ ticks:{ color:'#e6edf7', font:{ size:12 } }, grid:{ display:false } } }
+    }
+  });
+}
+
+/* ---------- events (wired once) ---------- */
+$('tabs').addEventListener('click', function(e){
+  var b = e.target.closest('button[data-filter]');
+  if (!b) return;
+  state.filter = b.getAttribute('data-filter');
+  Array.prototype.forEach.call(this.querySelectorAll('button'), function(x){ x.classList.remove('active'); });
+  b.classList.add('active');
+  applyFilters();
+});
+districtSelect.addEventListener('change', function(){ state.district = this.value; applyFilters(); });
+sortSelect.addEventListener('change', function(){ state.sort = this.value; applyFilters(); });
+var composing = false;
+searchInput.addEventListener('compositionstart', function(){ composing = true; });
+searchInput.addEventListener('compositionend', function(){
+  composing = false;
+  state.search = this.value.trim();
+  clearSearch.style.display = this.value ? 'block' : 'none';
+  applyFilters();
+});
+searchInput.addEventListener('input', function(){
+  if (composing) return; // wait until IME (Chinese) composition finishes
+  var v = this.value;
+  clearSearch.style.display = v ? 'block' : 'none';
+  state.search = v.trim();   // instant, no debounce
+  applyFilters();
+});
+clearSearch.addEventListener('click', function(){
+  searchInput.value = ''; state.search = ''; this.style.display = 'none';
+  searchInput.focus(); applyFilters();
+});
+$('refreshBtn').addEventListener('click', loadData);
+langSelect.addEventListener('change', function(){
+  lang = this.value;
+  applyI18n();
+  // re-render current view immediately with new language strings, then refetch localized data
+  applyFilters();
+  loadData();
+});
+
+/* ---------- startup ---------- */
+applyI18n();
+initMap();
+loadData();
+setInterval(loadData, REFRESH_MS);
+</script>
+</body>
+</html>
